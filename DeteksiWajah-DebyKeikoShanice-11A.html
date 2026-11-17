@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survei Kepuasan Pengunjung Gramedia AI</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Face-API.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gramedia: {
+                            blue: '#002B49',
+                            navy: '#001A2E',
+                            red: '#D32F2F',
+                            lightBlue: '#00A3E0',
+                            gray: '#F4F6F9'
+                        },
+                        rating: {
+                            lvl1: '#DC2626', // Sangat Tidak Puas / Marah (Red)
+                            lvl2: '#EA580C', // Tidak Puas (Orange)
+                            lvl3: '#EAB308', // Netral (Yellow)
+                            lvl4: '#84CC16', // Puas (Light Green)
+                            lvl5: '#16A34A'  // Sangat Puas (Bright Green)
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .custom-shadow {
+            box-shadow: 0 10px 30px -5px rgba(0, 43, 73, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+        }
+        .pulse-ring {
+            box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.7);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.98); box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.6); }
+            70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(211, 47, 47, 0); }
+            100% { transform: scale(0.98); box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); }
+        }
+        canvas#overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 min-h-screen flex flex-col justify-between selection:bg-gramedia-lightBlue selection:text-white">
+
+    <!-- Navbar Gramedia Header -->
+    <header class="bg-gramedia-blue text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="bg-white p-2 rounded-lg shadow-inner">
+                    <svg class="w-8 h-8 text-gramedia-blue" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm2 3v12h12V6H6zm2 2h8v2H8V8zm0 4h8v2H8v-2zm0 4h5v2H8v-2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="font-bold text-xl tracking-tight sm:text-2xl text-white">Gramedia <span class="text-gramedia-lightBlue text-sm font-normal px-2 py-0.5 rounded bg-blue-900 border border-blue-700">Digital AI Survey</span></h1>
+                    <p class="text-xs text-gray-300">Pendeteksi Kepuasan Pengunjung Berbasis Ekspresi Wajah (7 Emotion Dataset Standard & MMI Experiments)</p>
+                </div>
+            </div>
+            <div class="hidden md:flex items-center space-x-4 text-sm">
+                <button onclick="openDatasetModal()" class="flex items-center space-x-1.5 bg-blue-800/80 hover:bg-blue-700 text-xs text-blue-100 px-3 py-1.5 rounded-lg border border-blue-600 transition-colors">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span>Dataset Referensi Emosi</span>
+                </button>
+                <div class="flex items-center space-x-2 bg-blue-900/60 px-3 py-1.5 rounded-full border border-blue-700/50">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="ai-status" class="text-xs text-gray-200">Memuat AI Model...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full">
+        
+        <!-- Info Banner -->
+        <div class="bg-gradient-to-r from-gramedia-navy via-gramedia-blue to-blue-900 text-white rounded-2xl p-6 mb-8 custom-shadow relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 opacity-10 text-white">
+                <i class="fa-solid fa-face-smile text-[180px]"></i>
+            </div>
+            <div class="relative z-10 max-w-3xl">
+                <span class="bg-red-500/20 text-red-200 border border-red-500/30 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider mb-3 inline-block">Survei Pengalaman Toko</span>
+                <h2 class="text-2xl sm:text-3xl font-extrabold mb-2">Bagaimana Pengalaman Kunjungan Anda Hari Ini?</h2>
+                <p class="text-gray-300 text-sm sm:text-base leading-relaxed">
+                    Sistem Kamera AI kini mengintegrasikan <strong>7 Kategori Emosi Dataset (Fear, Anger, Disgust, Joy, Neutral, Sadness, Surprise)</strong> untuk memberikan deteksi skala 5 tingkat kepuasan pengunjung yang konsisten.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Column: Kamera Realtime & AI Overlay (Lg: 7 cols) -->
+            <div class="lg:col-span-7 flex flex-col space-y-6">
+                
+                <div class="bg-white rounded-2xl p-5 custom-shadow border border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-camera text-gramedia-blue text-lg"></i>
+                            <h3 class="font-bold text-gray-800">Kamera AI Pendeteksi Wajah Real-Time</h3>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="btn-toggle-cam" onclick="toggleWebcam()" class="px-3 py-1.5 bg-gramedia-blue hover:bg-blue-900 text-white text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1.5 shadow-sm">
+                                <i class="fa-solid fa-video"></i>
+                                <span id="lbl-toggle-cam">Mulai Kamera</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Video Container -->
+                    <div class="relative bg-gray-900 rounded-xl overflow-hidden aspect-video flex items-center justify-center border-2 border-gray-800 shadow-inner group">
+                        
+                        <!-- Video Feed -->
+                        <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+                        <canvas id="overlay" class="w-full h-full object-cover absolute top-0 left-0"></canvas>
+
+                        <!-- Camera Placeholder / Off State -->
+                        <div id="cam-placeholder" class="text-center p-8 flex flex-col items-center justify-center space-y-3">
+                            <div class="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 mb-2">
+                                <i class="fa-solid fa-camera-retro text-2xl"></i>
+                            </div>
+                            <p class="text-gray-300 font-medium text-sm">Kamera Belum Aktif</p>
+                            <p class="text-xs text-gray-500 max-w-xs">Klik "Mulai Kamera" di atas atau pilih preset 7 dataset emosi di bawah untuk simulasi presisi.</p>
+                        </div>
+
+                        <!-- Face Detection Box Indicator Header -->
+                        <div id="detection-badge" class="hidden absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-full border border-white/20 items-center space-x-2">
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                            <span id="detection-label" class="font-medium">Mendeteksi Wajah...</span>
+                        </div>
+                    </div>
+
+                    <!-- AI Dominant Confidence Meter -->
+                    <div class="mt-5 pt-4 border-t border-gray-100">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Akurasi Keyakinan Emosi Dominan</span>
+                            <span id="confidence-val" class="text-xs font-bold text-gramedia-blue">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                            <div id="confidence-bar" class="bg-gramedia-lightBlue h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live 7 Emotion Spectrum Breakdown Card -->
+                <div class="bg-white rounded-2xl p-5 custom-shadow border border-gray-200">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-bold text-gray-800 text-sm flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-bar text-gramedia-blue"></i>
+                            <span>Spektrum Kalibrasi 7 Emosi Dataset</span>
+                        </h4>
+                        <span class="text-[11px] text-gray-400 font-medium">Real-time Probabilities</span>
+                    </div>
+
+                    <!-- 7 Bar Breakdown -->
+                    <div class="space-y-2.5 pt-1 text-xs">
+                        <!-- Joy -->
+                        <div>
+                            <div class="flex justify-between text-gray-700 font-semibold mb-1">
+                                <span class="flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span><span>Joy (Senang/Gembira)</span></span>
+                                <span id="val-joy">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div id="bar-joy" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Surprise -->
+                        <div>
+                            <div class="flex justify-between text-gray-700 font-semibold mb-1">
+                                <span class="flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-lime-500 inline-block"></span><span>Surprise (Terkejut)</span></span>
+                                <span id="val-surprise">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div id="bar-surprise" class="bg-lime-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Neutral -->
+                        <div>
+                            <div class="flex justify-between text-gray-700 font-semibold mb-1">
+                                <span class="flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span><span>Neutral (Netral/Biasa)</span></span>
+                                <span id="val-neutral">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div id="bar-neutral" class="bg-amber-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Sadness -->
+                        <div>
+                            <div class="flex justify-between text-gray-700 font-semibold mb-1">
+                                <span class="flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span><span>Sadness (Sedih/Lesu)</span></span>
+                                <span id="val-sadness">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div id="bar-sadness" class="bg-orange-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Fear -->
+                        <div>
+                            <div class="flex justify-between text-gray-700 font-semibold mb-1">
+                                <span class="flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span><span>Fear (Cemas/Takut)</span></span>
+                                <span id="val-fear">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div id="bar-fear" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Disgust -->
+                        <div>
+                            <div class="flex justify-between text-gray-700 font-semibold mb-1">
+                                <span class="flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span><span>Disgust (Jijik/Kecewa)</span></span>
+                                <span id="val-disgust">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div id="bar-disgust" class="bg-rose-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Anger -->
+                        <div>
+                            <div class="flex justify-between text-gray-700 font-semibold mb-1">
+                                <span class="flex items-center space-x-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-600 inline-block"></span><span>Anger (Marah/Jengkel)</span></span>
+                                <span id="val-anger">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div id="bar-anger" class="bg-red-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7 Preset Dataset Simulator Buttons -->
+                <div class="bg-white rounded-2xl p-5 custom-shadow border border-gray-200">
+                    <div class="mb-3">
+                        <h4 class="font-bold text-gray-800 text-sm flex items-center space-x-2">
+                            <i class="fa-solid fa-flask text-gramedia-lightBlue"></i>
+                            <span>Uji Coba Simulator 7 Preset Emosi Dataset</span>
+                        </h4>
+                        <p class="text-xs text-gray-500">Pilih salah satu preset ekspresi untuk menyimulasikan data input visual 7 kategori.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 pt-1">
+                        <button onclick="setDatasetPreset('fear')" class="p-2 border rounded-xl hover:bg-purple-50 hover:border-purple-300 text-center transition-all group">
+                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">😨</div>
+                            <div class="text-[10px] font-bold text-gray-700">Fear</div>
+                            <div class="text-[9px] text-purple-600">Takut</div>
+                        </button>
+
+                        <button onclick="setDatasetPreset('anger')" class="p-2 border rounded-xl hover:bg-red-50 hover:border-red-300 text-center transition-all group">
+                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">😡</div>
+                            <div class="text-[10px] font-bold text-gray-700">Anger</div>
+                            <div class="text-[9px] text-red-600">Marah</div>
+                        </button>
+
+                        <button onclick="setDatasetPreset('disgust')" class="p-2 border rounded-xl hover:bg-rose-50 hover:border-rose-300 text-center transition-all group">
+                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">🤢</div>
+                            <div class="text-[10px] font-bold text-gray-700">Disgust</div>
+                            <div class="text-[9px] text-rose-600">Jijik</div>
+                        </button>
+
+                        <button onclick="setDatasetPreset('joy')" class="p-2 border rounded-xl hover:bg-emerald-50 hover:border-emerald-300 text-center transition-all group">
+                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">😃</div>
+                            <div class="text-[10px] font-bold text-gray-700">Joy</div>
+                            <div class="text-[9px] text-emerald-600">Senang</div>
+                        </button>
+
+                        <button onclick="setDatasetPreset('neutral')" class="p-2 border rounded-xl hover:bg-amber-50 hover:border-amber-300 text-center transition-all group">
+                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">😐</div>
+                            <div class="text-[10px] font-bold text-gray-700">Neutral</div>
+                            <div class="text-[9px] text-amber-600">Netral</div>
+                        </button>
+
+                        <button onclick="setDatasetPreset('sadness')" class="p-2 border rounded-xl hover:bg-orange-50 hover:border-orange-300 text-center transition-all group">
+                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">😢</div>
+                            <div class="text-[10px] font-bold text-gray-700">Sadness</div>
+                            <div class="text-[9px] text-orange-600">Sedih</div>
+                        </button>
+
+                        <button onclick="setDatasetPreset('surprise')" class="p-2 border rounded-xl hover:bg-lime-50 hover:border-lime-300 text-center transition-all group">
+                            <div class="text-xl mb-1 group-hover:scale-110 transition-transform">😲</div>
+                            <div class="text-[10px] font-bold text-gray-700">Surprise</div>
+                            <div class="text-[9px] text-lime-600">Terkejut</div>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Status Kepuasan & Voucher Diskon (Lg: 5 cols) -->
+            <div class="lg:col-span-5 flex flex-col space-y-6">
+                
+                <!-- Card Status Rating Aktif -->
+                <div class="bg-white rounded-2xl p-6 custom-shadow border border-gray-200 transition-all duration-300 relative overflow-hidden" id="status-card">
+                    <div id="status-color-bar" class="absolute top-0 left-0 right-0 h-2 bg-gray-300 transition-colors duration-500"></div>
+
+                    <div class="text-center py-4">
+                        <span class="text-xs font-bold uppercase tracking-widest text-gray-400">Hasil Deteksi Kepuasan Gramedia AI</span>
+                        
+                        <!-- Emoji Avatar Besar -->
+                        <div id="active-emoji" class="text-6xl sm:text-7xl my-3 transform hover:scale-105 transition-transform duration-300">
+                            😶
+                        </div>
+
+                        <h3 id="active-title" class="text-2xl font-extrabold text-gray-800 mb-1">Menunggu Input Ekspresi</h3>
+                        <p id="active-subtitle" class="text-sm text-gray-500 max-w-xs mx-auto">Arahkan wajah Anda ke kamera atau pilih ekspresi preset di bawah.</p>
+
+                        <!-- Badge Skor Rating -->
+                        <div class="mt-4 inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm font-bold" id="active-badge">
+                            <i class="fa-solid fa-star text-yellow-500"></i>
+                            <span id="active-score">Level Kepuasan: - / 5</span>
+                        </div>
+                    </div>
+
+                    <!-- 5 Level Progress Display Bar -->
+                    <div class="mt-6 pt-6 border-t border-gray-100">
+                        <div class="text-xs font-semibold text-gray-500 mb-3 flex justify-between">
+                            <span>Indikator Skala Kepuasan</span>
+                            <span class="text-gramedia-blue font-bold">5 Skala MMI AI</span>
+                        </div>
+                        <div class="grid grid-cols-5 gap-1.5 h-3 rounded-full overflow-hidden bg-gray-100 p-0.5 border">
+                            <div id="indicator-1" class="h-full rounded-l-full bg-gray-300 transition-all"></div>
+                            <div id="indicator-2" class="h-full bg-gray-300 transition-all"></div>
+                            <div id="indicator-3" class="h-full bg-gray-300 transition-all"></div>
+                            <div id="indicator-4" class="h-full bg-gray-300 transition-all"></div>
+                            <div id="indicator-5" class="h-full rounded-r-full bg-gray-300 transition-all"></div>
+                        </div>
+                        <div class="flex justify-between text-[10px] text-gray-400 mt-1.5 font-medium px-1">
+                            <span class="text-red-600 font-bold">1 (Marah/Jijik)</span>
+                            <span>2</span>
+                            <span>3 (Netral)</span>
+                            <span>4</span>
+                            <span class="text-green-600 font-bold">5 (Sangat Puas)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DYNAMIC AREA: Voucher Diskon Marah ATAU Rewards MyValue -->
+                
+                <!-- Area Diskon Khusus jika MARAH / JIJIK (Level 1) -->
+                <div id="angry-voucher-card" class="hidden bg-gradient-to-br from-red-600 via-red-700 to-rose-900 text-white rounded-2xl p-6 custom-shadow relative overflow-hidden border-2 border-red-500 pulse-ring">
+                    <div class="absolute -right-6 -top-6 text-white/10 text-8xl">
+                        <i class="fa-solid fa-ticket"></i>
+                    </div>
+
+                    <div class="relative z-10">
+                        <div class="flex items-center space-x-2 bg-red-800/80 text-red-100 text-xs px-3 py-1 rounded-full w-max mb-3 border border-red-400/30">
+                            <i class="fa-solid fa-heart-circle-exclamation text-red-300 animate-bounce"></i>
+                            <span>Permintaan Maaf Khusus Gramedia</span>
+                        </div>
+
+                        <h3 class="text-xl font-extrabold mb-1">Kami Mohon Maaf Atas Ketidaknyamanan Anda!</h3>
+                        <p class="text-xs text-red-100 leading-relaxed mb-4">
+                            Sistem AI kami mendeteksi kekecewaan/ketidakpuasan tinggi pada ekspresi wajah Anda. Gunakan voucher permohonan maaf ini di kasir.
+                        </p>
+
+                        <!-- Voucher Coupon Box -->
+                        <div class="bg-white text-gray-800 rounded-xl p-4 shadow-lg mb-4 border-2 border-dashed border-red-300">
+                            <div class="flex justify-between items-center mb-2">
+                                <div>
+                                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Voucher Diskon Spesial</span>
+                                    <span class="text-2xl font-black text-red-600">DISCOUNT 25%</span>
+                                </div>
+                                <div class="bg-red-50 px-3 py-1 rounded-lg border border-red-200 text-right">
+                                    <span class="text-[10px] text-red-500 font-bold block">Buku & Stationeries</span>
+                                    <span class="text-xs font-semibold text-gray-600">Berlaku Hari Ini</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between bg-gray-100 p-2.5 rounded-lg">
+                                <span id="voucher-code" class="font-mono font-bold text-sm tracking-wider text-gray-800">GRAMEDIA-MAAF25-8839</span>
+                                <button onclick="copyVoucherCode()" class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded font-semibold transition-colors flex items-center space-x-1">
+                                    <i class="fa-solid fa-copy"></i>
+                                    <span>Salin</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Form Feedback Permintaan Maaf -->
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-red-100 block">Bantu kami memperbaiki layanan toko:</label>
+                            <textarea id="feedback-text" rows="2" class="w-full rounded-lg text-xs p-2.5 text-gray-800 border-0 focus:ring-2 focus:ring-red-400" placeholder="Tuliskan kendala Anda di sini..."></textarea>
+                            <button onclick="submitFeedback()" class="w-full bg-red-950 hover:bg-black text-white text-xs font-bold py-2.5 rounded-lg transition-colors shadow">
+                                Kirim Masukan & Klaim Voucher
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Area Ucapan Terima Kasih (Level 2 - 5) -->
+                <div id="general-thanks-card" class="bg-white rounded-2xl p-6 custom-shadow border border-gray-200">
+                    <!-- High Satisfaction Reward Banner (Level 4-5) -->
+                    <div id="high-satisfaction-reward" class="hidden mb-4 p-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl shadow-md flex items-center justify-between">
+                        <div class="flex items-center space-x-2.5">
+                            <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-lg">🎁</div>
+                            <div>
+                                <h5 class="font-extrabold text-xs">Bonus Poin MyValue Gramedia!</h5>
+                                <p class="text-[10px] text-emerald-100">Terima kasih atas senyuman & respon positif Anda hari ini.</p>
+                            </div>
+                        </div>
+                        <span class="bg-white text-emerald-800 font-extrabold text-xs px-2.5 py-1 rounded-lg">+100 PTS</span>
+                    </div>
+
+                    <div class="flex items-center space-x-3 mb-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-50 text-gramedia-blue flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-book-open"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-gray-800 text-sm">Rekomendasi Bestseller Gramedia</h4>
+                            <p class="text-xs text-gray-500">Buku populer minggu ini di toko kami</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 pt-2">
+                        <!-- Book 1 -->
+                        <div class="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100">
+                            <div class="w-10 h-14 bg-gramedia-blue rounded flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow">
+                                BUKU 1
+                            </div>
+                            <div class="flex-grow">
+                                <h5 class="text-xs font-bold text-gray-800">Atomic Habits - James Clear</h5>
+                                <p class="text-[11px] text-gray-500">Self Improvement • Gramedia Pustaka</p>
+                                <span class="text-xs font-bold text-gramedia-red">Rp 108.000</span>
+                            </div>
+                            <span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">Bestseller</span>
+                        </div>
+
+                        <!-- Book 2 -->
+                        <div class="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100">
+                            <div class="w-10 h-14 bg-red-800 rounded flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow">
+                                BUKU 2
+                            </div>
+                            <div class="flex-grow">
+                                <h5 class="text-xs font-bold text-gray-800">Filosofi Teras - Henry Manampiring</h5>
+                                <p class="text-[11px] text-gray-500">Filsafat & Pengembangan Diri</p>
+                                <span class="text-xs font-bold text-gramedia-red">Rp 98.000</span>
+                            </div>
+                            <span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">Popular</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t text-center">
+                        <span class="text-xs text-gray-500">Tunjukkan hasil survei ini di kasir untuk mendapatkan <strong class="text-gramedia-blue">+50 Poin MyValue</strong></span>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Dashboard Ringkasan Statistik Kunjungan -->
+        <section class="mt-12 bg-white rounded-2xl p-6 custom-shadow border border-gray-200">
+            <h3 class="font-bold text-gray-800 text-base mb-4 flex items-center space-x-2">
+                <i class="fa-solid fa-chart-pie text-gramedia-blue"></i>
+                <span>Statistik Real-time Kepuasan Toko Gramedia Hari Ini</span>
+            </h3>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <span class="text-xs text-gray-500 block font-medium">Total Responden AI</span>
+                    <span id="stat-total" class="text-2xl font-black text-gramedia-blue">142</span>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <span class="text-xs text-gray-500 block font-medium">Rata-rata Skor</span>
+                    <span id="stat-avg" class="text-2xl font-black text-emerald-600">4.3 / 5.0</span>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <span class="text-xs text-gray-500 block font-medium">Tingkat Kepuasan</span>
+                    <span id="stat-satisfaction" class="text-2xl font-black text-gramedia-lightBlue">88%</span>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <span class="text-xs text-gray-500 block font-medium">Klaim Voucher Maaf</span>
+                    <span id="stat-vouchers" class="text-2xl font-black text-red-600">6</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal References for 7 Emotion Dataset -->
+    <div id="dataset-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
+                <h3 class="font-bold text-gray-800 text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-database text-gramedia-blue"></i>
+                    <span>Dataset Referensi Emosi (7 Primary Emotion Standard)</span>
+                </h3>
+                <button onclick="closeDatasetModal()" class="text-gray-400 hover:text-gray-600 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <p class="text-xs text-gray-600 mb-4 leading-relaxed">
+                Pemetaan AI kami mengalibrasi 7 kategori ekspresi dasar manusia ke dalam 5 Skala Kepuasan Pengunjung Gramedia (MMI Experiments Standard):
+            </p>
+
+            <div class="space-y-3 text-xs">
+                <div class="p-3 bg-red-50 rounded-xl border border-red-200 flex items-start space-x-3">
+                    <span class="text-2xl">😡 / 🤢</span>
+                    <div>
+                        <strong class="text-red-700 block">Anger & Disgust (Level 1 - Sangat Tidak Puas)</strong>
+                        <p class="text-gray-600">Terdeteksi dahi mengkerut, mulut ditarik ke bawah/tegang. Memicu voucher kompensasi diskon 25% Gramedia.</p>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-orange-50 rounded-xl border border-orange-200 flex items-start space-x-3">
+                    <span class="text-2xl">😢 / 😨</span>
+                    <div>
+                        <strong class="text-orange-700 block">Sadness & Fear (Level 2 - Tidak Puas)</strong>
+                        <p class="text-gray-600">Ekspresi lesu, cemas, atau kecewa ringan. Indikasi pengunjung kurang nyaman.</p>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-start space-x-3">
+                    <span class="text-2xl">😐</span>
+                    <div>
+                        <strong class="text-amber-700 block">Neutral (Level 3 - Netral)</strong>
+                        <p class="text-gray-600">Wajah santai tanpa emosi berlebih. Standar pengunjung saat fokus melihat buku.</p>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-lime-50 rounded-xl border border-lime-200 flex items-start space-x-3">
+                    <span class="text-2xl">😲 / 🙂</span>
+                    <div>
+                        <strong class="text-lime-700 block">Surprise & Mild Joy (Level 4 - Puas)</strong>
+                        <p class="text-gray-600">Alis terangkat gembira atau senyum tipis ramah saat menemukan promo/buku menarik.</p>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-start space-x-3">
+                    <span class="text-2xl">😃</span>
+                    <div>
+                        <strong class="text-emerald-700 block">High Joy (Level 5 - Sangat Puas)</strong>
+                        <p class="text-gray-600">Senyum lebar, mata berbinar gembira. Mendapatkan +100 Poin Hadiah MyValue.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-3 border-t text-right">
+                <button onclick="closeDatasetModal()" class="px-4 py-2 bg-gramedia-blue hover:bg-blue-900 text-white text-xs font-bold rounded-lg transition-colors">
+                    Tutup Panduan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gramedia-navy text-gray-400 py-6 border-t border-gray-800 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs space-y-2">
+            <p>&copy; 2026 PT Gramedia Asri Media. Sistem Deteksi Kepuasan Pengunjung Berbasis AI.</p>
+            <p class="text-gray-500">Menggunakan Model 7 Emotion Dataset Standard (Fear, Anger, Disgust, Joy, Neutral, Sadness, Surprise) & MMI Face Experiments.</p>
+        </div>
+    </footer>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl z-50 hidden transition-all duration-300 transform translate-y-10 flex items-center space-x-3 text-sm">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-green-400 text-lg"></i>
+        <span id="toast-msg">Notifikasi</span>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Global State & Configuration
+        let isWebcamActive = false;
+        let webcamStream = null;
+        let detectionInterval = null;
+        let currentRatingLevel = 0;
+        let modelsLoaded = false;
+
+        // Level Definitions matching 7 Emotion Standard + 5 MMI Scale
+        const RATING_LEVELS = {
+            1: {
+                level: 1,
+                title: "Sangat Tidak Puas / Kecewa",
+                subtitle: "Ekspresi terdeteksi dominan Anger (Marah) atau Disgust (Jijik/Kecewa).",
+                emoji: "😡",
+                color: "#DC2626", // Red
+                scoreText: "Level Kepuasan: 1 / 5 (Sangat Buruk)",
+                isAngry: true,
+                isHighJoy: false
+            },
+            2: {
+                level: 2,
+                title: "Tidak Puas / Cemas",
+                subtitle: "Ekspresi terdeteksi dominan Sadness (Sedih) atau Fear (Cemas).",
+                emoji: "🙁",
+                color: "#EA580C", // Orange
+                scoreText: "Level Kepuasan: 2 / 5 (Kurang Baik)",
+                isAngry: false,
+                isHighJoy: false
+            },
+            3: {
+                level: 3,
+                title: "Netral / Biasa",
+                subtitle: "Ekspresi terdeteksi dominan Neutral (Datar/Rileks).",
+                emoji: "😐",
+                color: "#EAB308", // Yellow
+                scoreText: "Level Kepuasan: 3 / 5 (Cukup / Netral)",
+                isAngry: false,
+                isHighJoy: false
+            },
+            4: {
+                level: 4,
+                title: "Puas / Tertarik",
+                subtitle: "Ekspresi terdeteksi Surprise (Terkejut Positif) atau Senyum Tipis.",
+                emoji: "🙂",
+                color: "#84CC16", // Light Green
+                scoreText: "Level Kepuasan: 4 / 5 (Puas / Baik)",
+                isAngry: false,
+                isHighJoy: false
+            },
+            5: {
+                level: 5,
+                title: "Sangat Puas / Gembira",
+                subtitle: "Ekspresi terdeteksi dominan Joy (Senang/Gembira Lebar).",
+                emoji: "😃",
+                color: "#16A34A", // Bright Green
+                scoreText: "Level Kepuasan: 5 / 5 (Sangat Puas / Sempurna)",
+                isAngry: false,
+                isHighJoy: true
+            }
+        };
+
+        // Initialize Face-API Models
+        async function loadModels() {
+            const statusEl = document.getElementById('ai-status');
+            try {
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                
+                statusEl.innerText = "Mengunduh Model 7 Dataset Emosi...";
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+                
+                modelsLoaded = true;
+                statusEl.innerText = "Model AI Siap Digunakan";
+                statusEl.classList.add("text-emerald-300");
+                showToast("Model AI Pendeteksi 7 Emosi Berhasil Dimuat", "check");
+            } catch (err) {
+                console.warn("Gagal memuat model CDN face-api, beralih ke Mode Simulator 7 Dataset Preset.", err);
+                statusEl.innerText = "Mode Simulator 7 Emosi Aktif";
+                statusEl.classList.add("text-yellow-300");
+            }
+        }
+
+        // Toggle Webcam Start / Stop
+        async function toggleWebcam() {
+            const video = document.getElementById('webcam');
+            const placeholder = document.getElementById('cam-placeholder');
+            const badge = document.getElementById('detection-badge');
+            const btnText = document.getElementById('lbl-toggle-cam');
+
+            if (isWebcamActive) {
+                if (webcamStream) {
+                    webcamStream.getTracks().forEach(track => track.stop());
+                }
+                clearInterval(detectionInterval);
+                video.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+                badge.classList.add('hidden');
+                btnText.innerText = "Mulai Kamera";
+                isWebcamActive = false;
+                updateConfidence(0);
+                resetSpectrumBars();
+                showToast("Kamera Dinonaktifkan", "info");
+            } else {
+                try {
+                    btnText.innerText = "Menghubungkan...";
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 640, height: 480, facingMode: 'user' }, 
+                        audio: false 
+                    });
+                    
+                    webcamStream = stream;
+                    video.srcObject = stream;
+                    
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        video.classList.remove('hidden');
+                        placeholder.classList.add('hidden');
+                        badge.classList.remove('hidden');
+                        badge.classList.add('flex');
+                        btnText.innerText = "Matikan Kamera";
+                        isWebcamActive = true;
+                        
+                        startDetectionLoop();
+                        showToast("Kamera Aktif. Memulai Deteksi 7 Emosi", "check");
+                    };
+                } catch (err) {
+                    console.error("Akses Kamera Ditolak:", err);
+                    btnText.innerText = "Mulai Kamera";
+                    alert("Tidak dapat mengakses kamera. Pastikan izin kamera diberikan di browser Anda. Anda dapat menggunakan preset 7 emosi di bawah.");
+                }
+            }
+        }
+
+        // Real-Time Face Expression Loop
+        function startDetectionLoop() {
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('overlay');
+            const displaySize = { width: video.clientWidth || 640, height: video.clientHeight || 480 };
+            
+            faceapi.matchDimensions(canvas, displaySize);
+
+            detectionInterval = setInterval(async () => {
+                if (!isWebcamActive) return;
+
+                if (modelsLoaded) {
+                    try {
+                        const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+
+                        if (detections) {
+                            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                            
+                            // Clear & Draw Overlay Bounding Box
+                            const ctx = canvas.getContext('2d');
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            
+                            const box = resizedDetections.detection.box;
+                            ctx.strokeStyle = '#00A3E0';
+                            ctx.lineWidth = 3;
+                            ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+                            processExpressions(detections.expressions);
+                        } else {
+                            document.getElementById('detection-label').innerText = "Wajah Tidak Terdeteksi";
+                            updateConfidence(0);
+                        }
+                    } catch (e) {
+                        console.error("Error pada loop deteksi:", e);
+                    }
+                }
+            }, 300);
+        }
+
+        // Process Expression Probabilities for 7 Categories Dataset & Map to 5 Levels
+        function processExpressions(expressions) {
+            document.getElementById('detection-label').innerText = "Wajah Terdeteksi";
+
+            // Extract 7 key emotions
+            const fear = Math.round((expressions.fearful || 0) * 100);
+            const anger = Math.round((expressions.angry || 0) * 100);
+            const disgust = Math.round((expressions.disgusted || 0) * 100);
+            const joy = Math.round((expressions.happy || 0) * 100);
+            const neutral = Math.round((expressions.neutral || 0) * 100);
+            const sadness = Math.round((expressions.sad || 0) * 100);
+            const surprise = Math.round((expressions.surprised || 0) * 100);
+
+            // Update 7 Spectrum Bars
+            updateSpectrumBar('joy', joy);
+            updateSpectrumBar('surprise', surprise);
+            updateSpectrumBar('neutral', neutral);
+            updateSpectrumBar('sadness', sadness);
+            updateSpectrumBar('fear', fear);
+            updateSpectrumBar('disgust', disgust);
+            updateSpectrumBar('anger', anger);
+
+            // Determine dominant emotion
+            const emotionMap = [
+                { name: 'joy', val: joy },
+                { name: 'surprise', val: surprise },
+                { name: 'neutral', val: neutral },
+                { name: 'sadness', val: sadness },
+                { name: 'fear', val: fear },
+                { name: 'disgust', val: disgust },
+                { name: 'anger', val: anger }
+            ];
+
+            emotionMap.sort((a, b) => b.val - a.val);
+            const dominant = emotionMap[0];
+
+            updateConfidence(dominant.val);
+
+            // Multi-factor Satisfaction Level Calibration (1-5 Scale)
+            let calculatedLevel = 3;
+
+            if (dominant.name === 'anger' || dominant.name === 'disgust') {
+                calculatedLevel = 1; // Marah / Sangat Tidak Puas
+            } else if (dominant.name === 'sadness' || dominant.name === 'fear') {
+                calculatedLevel = 2; // Tidak Puas
+            } else if (dominant.name === 'neutral') {
+                calculatedLevel = 3; // Netral
+            } else if (dominant.name === 'surprise') {
+                calculatedLevel = 4; // Puas
+            } else if (dominant.name === 'joy') {
+                calculatedLevel = dominant.val > 70 ? 5 : 4; // Sangat Puas atau Puas
+            }
+
+            updateSatisfactionUI(calculatedLevel);
+        }
+
+        // Set Preset 7 Dataset Emotion Directly (Simulator)
+        function setDatasetPreset(emotionKey) {
+            const presets = {
+                fear: { fear: 85, anger: 5, disgust: 2, joy: 0, neutral: 5, sadness: 3, surprise: 0 },
+                anger: { fear: 2, anger: 92, disgust: 4, joy: 0, neutral: 2, sadness: 0, surprise: 0 },
+                disgust: { fear: 1, anger: 10, disgust: 86, joy: 0, neutral: 3, sadness: 0, surprise: 0 },
+                joy: { fear: 0, anger: 0, disgust: 0, joy: 95, neutral: 3, sadness: 0, surprise: 2 },
+                neutral: { fear: 1, anger: 1, disgust: 0, joy: 3, neutral: 90, sadness: 2, surprise: 3 },
+                sadness: { fear: 4, anger: 2, disgust: 3, joy: 0, neutral: 6, sadness: 85, surprise: 0 },
+                surprise: { fear: 2, anger: 0, disgust: 0, joy: 12, neutral: 5, sadness: 0, surprise: 81 }
+            };
+
+            const selected = presets[emotionKey];
+            if (selected) {
+                processExpressions({
+                    fearful: selected.fear / 100,
+                    angry: selected.anger / 100,
+                    disgusted: selected.disgust / 100,
+                    happy: selected.joy / 100,
+                    neutral: selected.neutral / 100,
+                    sad: selected.sadness / 100,
+                    surprised: selected.surprise / 100
+                });
+                showToast(`Preset Emosi Dataset '${emotionKey.toUpperCase()}' Diaplikasikan`, "info");
+            }
+        }
+
+        // Update Spectrum Individual Bar
+        function updateSpectrumBar(key, val) {
+            const bar = document.getElementById(`bar-${key}`);
+            const text = document.getElementById(`val-${key}`);
+            if (bar && text) {
+                bar.style.width = `${val}%`;
+                text.innerText = `${val}%`;
+            }
+        }
+
+        // Reset Spectrum Bars
+        function resetSpectrumBars() {
+            ['joy', 'surprise', 'neutral', 'sadness', 'fear', 'disgust', 'anger'].forEach(k => {
+                updateSpectrumBar(k, 0);
+            });
+        }
+
+        // Update UI State based on Rating Level (1-5)
+        function updateSatisfactionUI(level) {
+            if (currentRatingLevel === level) return;
+            currentRatingLevel = level;
+
+            const data = RATING_LEVELS[level];
+            if (!data) return;
+
+            // 1. Update Active Card Text & Emoji
+            document.getElementById('active-emoji').innerText = data.emoji;
+            document.getElementById('active-title').innerText = data.title;
+            document.getElementById('active-subtitle').innerText = data.subtitle;
+            document.getElementById('active-score').innerText = data.scoreText;
+            document.getElementById('status-color-bar').style.backgroundColor = data.color;
+
+            // 2. Update 5-Level Color Bar
+            for (let i = 1; i <= 5; i++) {
+                const bar = document.getElementById(`indicator-${i}`);
+                if (i <= level) {
+                    bar.style.backgroundColor = RATING_LEVELS[i].color;
+                    bar.style.opacity = i === level ? "1" : "0.5";
+                } else {
+                    bar.style.backgroundColor = "#E5E7EB";
+                    bar.style.opacity = "1";
+                }
+            }
+
+            // 3. Show Special Discount Voucher (Level 1) OR High Satisfaction MyValue Banner (Level 5)
+            const angryCard = document.getElementById('angry-voucher-card');
+            const thanksCard = document.getElementById('general-thanks-card');
+            const highReward = document.getElementById('high-satisfaction-reward');
+
+            if (data.isAngry) {
+                angryCard.classList.remove('hidden');
+                thanksCard.classList.add('hidden');
+                document.getElementById('voucher-code').innerText = `GRAMEDIA-MAAF25-${Math.floor(1000 + Math.random() * 9000)}`;
+            } else {
+                angryCard.classList.add('hidden');
+                thanksCard.classList.remove('hidden');
+
+                if (data.isHighJoy) {
+                    highReward.classList.remove('hidden');
+                } else {
+                    highReward.classList.add('hidden');
+                }
+            }
+        }
+
+        // Update Confidence Bar UI
+        function updateConfidence(percent) {
+            document.getElementById('confidence-val').innerText = `${percent}%`;
+            document.getElementById('confidence-bar').style.width = `${percent}%`;
+        }
+
+        // Modal Dataset Handlers
+        function openDatasetModal() {
+            document.getElementById('dataset-modal').classList.remove('hidden');
+        }
+
+        function closeDatasetModal() {
+            document.getElementById('dataset-modal').classList.add('hidden');
+        }
+
+        // Copy Voucher Code to Clipboard
+        function copyVoucherCode() {
+            const code = document.getElementById('voucher-code').innerText;
+            const tempInput = document.createElement("input");
+            tempInput.value = code;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+
+            showToast("Kode Voucher 25% Berhasil Disalin!", "check");
+        }
+
+        // Submit Feedback for Angry Customers
+        function submitFeedback() {
+            const txt = document.getElementById('feedback-text').value;
+            if (!txt.trim()) {
+                alert("Silakan tuliskan masukan Anda terlebih dahulu.");
+                return;
+            }
+            showToast("Terima kasih. Masukan Anda telah terkirim ke Manajemen Gramedia.", "check");
+            document.getElementById('feedback-text').value = "";
+            
+            const vStat = document.getElementById('stat-vouchers');
+            vStat.innerText = parseInt(vStat.innerText) + 1;
+        }
+
+        // Toast Notification Helper
+        function showToast(msg, type = "check") {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-msg');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.innerText = msg;
+
+            if (type === "check") {
+                toastIcon.className = "fa-solid fa-circle-check text-green-400 text-lg";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-info text-blue-400 text-lg";
+            }
+
+            toast.classList.remove('hidden', 'translate-y-10');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-10');
+                setTimeout(() => toast.classList.add('hidden'), 300);
+            }, 3000);
+        }
+
+        // Window Load Initialization
+        window.addEventListener('load', () => {
+            loadModels();
+            // Default initial state: Neutral (Level 3) with Neutral Preset
+            setDatasetPreset('neutral');
+        });
+    </script>
+</body>
+</html>
